@@ -6,11 +6,13 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
+	"time"
 )
 
 type Music struct {
@@ -27,34 +29,19 @@ type ItunesResult struct {
 }
 
 var (
-	nowPlayingFile string
+	processingFile string
 )
 
 func main() {
 	RegisterExitProcess()
 
-	argsLen := len(os.Args)
-	if argsLen == 1 {
-		fmt.Println("please input term")
-		os.Exit(1)
+	search, rate, shuffle := ProcessArgs()
+
+	itunes := <-RequestITunes(search)
+
+	if shuffle {
+		Shuffle(&itunes.Results)
 	}
-
-	search := os.Args[1]
-	rate := "1"
-
-	for i := 2; i < argsLen; i++ {
-
-		v := os.Args[i]
-
-		if i+1 < argsLen {
-			if v == "--rate" || v == "-r" {
-				rate = os.Args[i+1]
-				i++
-			}
-		}
-	}
-
-	itunes := <-RequestItunes(search)
 
 	for i, music := range itunes.Results {
 		Info(music, i+1, itunes.ResultCount)
@@ -63,9 +50,50 @@ func main() {
 
 }
 
+func ProcessArgs() (search string, rate string, shuffle bool) {
+
+	argsLen := len(os.Args)
+	if argsLen == 1 {
+		fmt.Println("please input term")
+		os.Exit(1)
+	}
+
+	search = os.Args[1]
+	rate = "1"
+	shuffle = false
+
+	hasOption := false
+
+	for i := 2; i < argsLen; i++ {
+
+		v := os.Args[i]
+
+		if !hasOption {
+			if v[0:1] == "-" {
+				hasOption = true
+			} else {
+				search = search + " " + v
+				continue
+			}
+		}
+
+		switch v {
+		case "--rate", "-r":
+			if i+1 < argsLen {
+				rate = os.Args[i+1]
+				i++
+			}
+		case "--shuffle":
+			shuffle = true
+		}
+
+	}
+
+	return
+}
+
 func Play(fileName string, rate string) {
 	defer os.Remove(fileName)
-	nowPlayingFile = fileName
 
 	out, _ := exec.Command("afplay", fileName, "--rate", rate).CombinedOutput()
 	fmt.Print(string(out))
@@ -89,13 +117,16 @@ func Download(url string) <-chan string {
 		}
 		defer response.Body.Close()
 
-		file, err := ioutil.TempFile(os.TempDir(), "tmp_bgm_")
+		file, err := ioutil.TempFile(os.TempDir(), "bgm_tmp")
+		processingFile = file.Name()
+
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer file.Close()
 
 		io.Copy(file, response.Body)
+
 		fileNameChan <- file.Name()
 
 	}(url)
@@ -104,7 +135,7 @@ func Download(url string) <-chan string {
 
 }
 
-func RequestItunes(term string) <-chan ItunesResult {
+func RequestITunes(term string) <-chan ItunesResult {
 	resultChan := make(chan ItunesResult)
 
 	params := url.Values{}
@@ -144,12 +175,23 @@ func RequestItunes(term string) <-chan ItunesResult {
 	return resultChan
 }
 
+func Shuffle(a *[]Music) {
+
+	musics := *a
+
+	rand.Seed(time.Now().UnixNano())
+	for i := range musics {
+		j := rand.Intn(i + 1)
+		musics[i], musics[j] = musics[j], musics[i]
+	}
+}
+
 func RegisterExitProcess() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		for range c {
-			os.Remove(nowPlayingFile)
+			os.Remove(processingFile)
 			os.Exit(1)
 		}
 	}()
