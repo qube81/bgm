@@ -148,7 +148,7 @@ func RequestITunes(term string) <-chan ItunesResult {
 
 	go func(endPoint string) {
 		fmt.Println("Request iTunes search API...")
-		fmt.Print()
+		fmt.Println()
 		response, err := http.Get(endPoint + "?" + params.Encode())
 
 		if err != nil {
