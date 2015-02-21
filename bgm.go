@@ -91,7 +91,7 @@ func PlayAll(result iTunesSearch, rate string, wait *sync.WaitGroup) {
 func Play(fileName string, rate string) {
 	defer os.Remove(fileName)
 
-	out, _ := exec.Command("afplay", fileName, "--rate", rate, "-q", "1", "-d").CombinedOutput()
+	out, _ := exec.Command("afplay", fileName, "--rate", rate, "-q", "1").CombinedOutput()
 	fmt.Print(string(out))
 }
 
