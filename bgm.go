@@ -7,10 +7,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
-	"strconv"
 )
 
 type Music struct {
@@ -27,18 +27,20 @@ type ItunesResult struct {
 }
 
 var (
-	argsLen        int
-	rate           = 1
-	err            error
-	search         string
-	resultCount    int
 	nowPlayingFile string
 )
 
 func main() {
 	RegisterExitProcess()
 
-	search = os.Args[1]
+	argsLen := len(os.Args)
+	if argsLen == 1 {
+		fmt.Println("please input term")
+		os.Exit(1)
+	}
+
+	search := os.Args[1]
+	rate := "1"
 
 	for i := 2; i < argsLen; i++ {
 
@@ -46,35 +48,31 @@ func main() {
 
 		if i+1 < argsLen {
 			if v == "--rate" || v == "-r" {
-				rate, err = strconv.Atoi(os.Args[i+1])
-				if err != nil {
-					rate = 1
-				}
+				rate = os.Args[i+1]
 				i++
 			}
 		}
-
 	}
 
 	itunes := <-RequestItunes(search)
-	resultCount = itunes.ResultCount
 
 	for i, music := range itunes.Results {
-		Info(music, i+1)
-		Play(<-Download(music.PreviewURL))
+		Info(music, i+1, itunes.ResultCount)
+		Play(<-Download(music.PreviewURL), rate)
 	}
 
 }
 
-func Play(fileName string) {
+func Play(fileName string, rate string) {
 	defer os.Remove(fileName)
 	nowPlayingFile = fileName
-	out, _ := exec.Command("afplay", fileName, "--rate", strconv.Itoa(rate)).CombinedOutput()
+
+	out, _ := exec.Command("afplay", fileName, "--rate", rate).CombinedOutput()
 	fmt.Print(string(out))
 }
 
-func Info(music Music, num int) {
-	fmt.Printf("♪ (%d/%d)\n", num, resultCount)
+func Info(music Music, num int, total int) {
+	fmt.Printf("♪ (%d/%d)\n", num, total)
 	fmt.Printf("# %s - %s / %s\n", music.TrackName, music.ArtistName, music.CollectionName)
 	fmt.Printf("%s\n", music.TrackViewURL)
 	fmt.Println()
@@ -109,13 +107,21 @@ func Download(url string) <-chan string {
 func RequestItunes(term string) <-chan ItunesResult {
 	resultChan := make(chan ItunesResult)
 
-	itunesEndPoint := "https://itunes.apple.com/search?term=%s&country=JP&media=music&limit=200"
+	params := url.Values{}
+	params.Add("term", term)
+	params.Add("country", "JP")
+	params.Add("media", "music")
+	params.Add("limit", "200")
 
-	go func(url string) {
+	itunesEndPoint := "https://itunes.apple.com/search/"
+
+	go func(endPoint string) {
 		fmt.Print("Request Itunes...")
-		response, err := http.Get(url)
+		response, err := http.Get(endPoint + "?" + params.Encode())
+
 		if err != nil {
 			log.Fatal(err)
+			os.Exit(1)
 
 		} else {
 			defer response.Body.Close()
@@ -123,18 +129,17 @@ func RequestItunes(term string) <-chan ItunesResult {
 
 			contents, err := ioutil.ReadAll(response.Body)
 			if err != nil {
-				fmt.Printf("%s", err)
+				log.Fatal(err)
 				os.Exit(1)
 			}
 
 			var data ItunesResult
-
 			json.Unmarshal([]byte(contents), &data)
 
 			resultChan <- data
 		}
 
-	}(fmt.Sprintf(itunesEndPoint, term))
+	}(itunesEndPoint)
 
 	return resultChan
 }
