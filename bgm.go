@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -8,30 +9,40 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 )
 
+type Music struct {
+	ArtistName     string `json:"artistName"`
+	TrackName      string `json:"trackName"`
+	PreviewURL     string `json:"previewUrl"`
+	CollectionName string `json:"CollectionName"`
+	TrackViewURL   string `json:"TrackViewURL"`
+}
+
+type ItunesResult struct {
+	ResultCount int `json:"resultCount"`
+	Results     []Music
+}
+
+var (
+	argsLen        int
+	rate           = 1
+	err            error
+	search         string
+	resultCount    int
+	nowPlayingFile string
+)
+
 func main() {
+	RegisterExitProcess()
 
-	var (
-		argsLen       = len(os.Args)
-		rate          = 1
-		err           error
-		search        string
-		MatsukenSamba = "http://a989.phobos.apple.com/us/r20/Music2/v4/a2/b5/1b/a2b51beb-4b0a-a9a2-a636-03c215ab2db3/mzaf_3999292651922270843.aac.m4a"
-	)
+	search = os.Args[1]
 
-	for i := 0; i < argsLen; i++ {
-
-		if i == 0 {
-			continue
-		}
+	for i := 2; i < argsLen; i++ {
 
 		v := os.Args[i]
-
-		if i == 1 {
-			search = v
-		}
 
 		if i+1 < argsLen {
 			if v == "--rate" || v == "-r" {
@@ -45,28 +56,35 @@ func main() {
 
 	}
 
-	json := <-RequestItunes(search)
-	fmt.Println(json)
+	itunes := <-RequestItunes(search)
+	resultCount = itunes.ResultCount
 
-	filename := <-Download(MatsukenSamba)
-	defer os.Remove(filename)
-
-	fmt.Println("NOW PLAYING: {#artistname} - {#trackname}")
-	out, _ := exec.Command("afplay", filename, "--rate", strconv.Itoa(rate)).CombinedOutput()
-	fmt.Print(string(out))
+	for i, music := range itunes.Results {
+		Info(music, i+1)
+		Play(<-Download(music.PreviewURL))
+	}
 
 }
 
-/*
-GetMusicFile download specified url music file, and save temp dir
-@return channel tempfile name
-*/
+func Play(fileName string) {
+	defer os.Remove(fileName)
+	nowPlayingFile = fileName
+	out, _ := exec.Command("afplay", fileName, "--rate", strconv.Itoa(rate)).CombinedOutput()
+	fmt.Print(string(out))
+}
+
+func Info(music Music, num int) {
+	fmt.Printf("♪ (%d/%d)\n", num, resultCount)
+	fmt.Printf("# %s - %s / %s\n", music.TrackName, music.ArtistName, music.CollectionName)
+	fmt.Printf("%s\n", music.TrackViewURL)
+	fmt.Println()
+}
+
 func Download(url string) <-chan string {
 
 	fileNameChan := make(chan string)
 
 	go func(url string) {
-		fmt.Print("Loading...")
 		response, err := http.Get(url)
 		if err != nil {
 			log.Fatal(err)
@@ -79,7 +97,6 @@ func Download(url string) <-chan string {
 		}
 		defer file.Close()
 
-		fmt.Println("http status: " + response.Status)
 		io.Copy(file, response.Body)
 		fileNameChan <- file.Name()
 
@@ -89,29 +106,46 @@ func Download(url string) <-chan string {
 
 }
 
-/*
+func RequestItunes(term string) <-chan ItunesResult {
+	resultChan := make(chan ItunesResult)
 
-*/
-func RequestItunes(term string) <-chan string {
-	jsonChan := make(chan string)
-	itunesEndPoint := "https://itunes.apple.com/search?term=%s&country=JP&media=music&entity=song&attribute=songTerm&limit=1"
+	itunesEndPoint := "https://itunes.apple.com/search?term=%s&country=JP&media=music&limit=200"
 
 	go func(url string) {
 		fmt.Print("Request Itunes...")
 		response, err := http.Get(url)
 		if err != nil {
 			log.Fatal(err)
+
 		} else {
 			defer response.Body.Close()
+			fmt.Println("http status: " + response.Status + "\n")
+
 			contents, err := ioutil.ReadAll(response.Body)
 			if err != nil {
 				fmt.Printf("%s", err)
 				os.Exit(1)
 			}
-			jsonChan <- string(contents)
+
+			var data ItunesResult
+
+			json.Unmarshal([]byte(contents), &data)
+
+			resultChan <- data
 		}
 
 	}(fmt.Sprintf(itunesEndPoint, term))
 
-	return jsonChan
+	return resultChan
+}
+
+func RegisterExitProcess() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		for range c {
+			os.Remove(nowPlayingFile)
+			os.Exit(1)
+		}
+	}()
 }
