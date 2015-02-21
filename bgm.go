@@ -29,7 +29,7 @@ type ItunesResult struct {
 }
 
 var (
-	processingFile string
+	downloadedFiles []string
 )
 
 func main() {
@@ -118,7 +118,7 @@ func Download(url string) <-chan string {
 		defer response.Body.Close()
 
 		file, err := ioutil.TempFile(os.TempDir(), "bgm_tmp")
-		processingFile = file.Name()
+		downloadedFiles = append(downloadedFiles, file.Name())
 
 		if err != nil {
 			log.Fatal(err)
@@ -147,7 +147,8 @@ func RequestITunes(term string) <-chan ItunesResult {
 	itunesEndPoint := "https://itunes.apple.com/search/"
 
 	go func(endPoint string) {
-		fmt.Print("Request Itunes...")
+		fmt.Println("Request iTunes search API...")
+		fmt.Print()
 		response, err := http.Get(endPoint + "?" + params.Encode())
 
 		if err != nil {
@@ -156,7 +157,6 @@ func RequestITunes(term string) <-chan ItunesResult {
 
 		} else {
 			defer response.Body.Close()
-			fmt.Println("http status: " + response.Status + "\n")
 
 			contents, err := ioutil.ReadAll(response.Body)
 			if err != nil {
@@ -191,7 +191,9 @@ func RegisterExitProcess() {
 	signal.Notify(c, os.Interrupt)
 	go func() {
 		for range c {
-			os.Remove(processingFile)
+			for _, file := range downloadedFiles {
+				os.Remove(file)
+			}
 			os.Exit(1)
 		}
 	}()
