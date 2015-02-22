@@ -17,7 +17,7 @@ go get github.com/qube81/gobgm
 ## usage
 
 ```
-gobgm [term...] [--shuffle] [-r|--rate] [--async]
+gobgm [--help] <term...> [--shuffle] [-r|--rate] [--async]
 
      term:  search query
 -r,--rate:  play at playback rate
