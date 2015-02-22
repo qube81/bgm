@@ -212,6 +212,11 @@ func ProcessArgs() (query string, rate string, shuffle bool, async bool) {
 	}
 
 	query = os.Args[1]
+
+	if query == "--help" {
+		ShowHelp()
+	}
+
 	rate = "1"
 	shuffle = false
 	async = false
@@ -246,4 +251,19 @@ func ProcessArgs() (query string, rate string, shuffle bool, async bool) {
 	}
 
 	return
+}
+
+func ShowHelp() {
+	fmt.Println(`
+ gobgm [--help] <term...> [--shuffle] [-r|--rate] [--async]
+		
+      term:  search query
+ -r,--rate:  play at playback rate
+ --shuffle:  random order 
+   --async:  play all track at once (max 10 songs)
+    --help:  show help
+		
+ to stop Ctrl-c.
+		`)
+	os.Exit(0)
 }

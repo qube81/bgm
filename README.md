@@ -23,6 +23,7 @@ gobgm [term...] [--shuffle] [-r|--rate] [--async]
 -r,--rate:  play at playback rate
 --shuffle:  random order 
   --async:  play all track at once (max 10 songs)
+   --help:  show help
   
  to stop Ctrl-c.
 ```
