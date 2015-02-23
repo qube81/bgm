@@ -39,8 +39,8 @@ type Music struct {
 }
 
 type ITunesResponse struct {
-	ResultCount int `json:"resultCount"`
-	Results     []Music
+	Count  int     `json:"resultCount"`
+	Musics []Music `json:"results"`
 }
 
 func SearchMusic(v ITunesRequestParams) <-chan ITunesResponse {
