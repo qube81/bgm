@@ -136,6 +136,9 @@ func ProcessArgs() (query string, rate string, shuffle bool, async bool, list bo
 			list = true
 		case "--async":
 			async = true
+		default:
+			fmt.Printf("unknown option %s\n", v)
+			os.Exit(1)
 		}
 
 	}
