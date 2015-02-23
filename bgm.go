@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -34,8 +35,26 @@ var (
 	downloadedFiles []string
 )
 
+const (
+	asyncLimit = 10
+)
+
 func main() {
 	RegisterExitProcess()
+
+	if envvar := os.Getenv("GOMAXPROCS"); envvar == "" {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
+
+	if len(os.Args) == 1 {
+		fmt.Println("please input term")
+		os.Exit(1)
+	}
+
+	if os.Args[1] == "--help" {
+		ShowHelp()
+		return
+	}
 
 	query, rate, shuffle, async := ProcessArgs()
 	result := <-RequestITunesSearch(query)
@@ -63,11 +82,10 @@ func PlayNormal(result iTunesSearch, rate string, shuffle bool) {
 func PlayAll(result iTunesSearch, rate string, wait *sync.WaitGroup) {
 
 	var files []string
-	limit := 10
 
-	for i, music := range result.Results[0:limit] {
+	for i, music := range result.Results[0:asyncLimit] {
 
-		Info(music, i+1, limit)
+		Info(music, i+1, asyncLimit)
 
 		wait.Add(1)
 		go func(music Music) {
@@ -205,25 +223,13 @@ func RegisterExitProcess() {
 
 func ProcessArgs() (query string, rate string, shuffle bool, async bool) {
 
-	argsLen := len(os.Args)
-	if argsLen == 1 {
-		fmt.Println("please input term")
-		os.Exit(1)
-	}
-
-	query = os.Args[1]
-
-	if query == "--help" {
-		ShowHelp()
-	}
-
 	rate = "1"
 	shuffle = false
 	async = false
 
 	hasOption := false
 
-	for i := 2; i < argsLen; i++ {
+	for i := 2; i < len(os.Args); i++ {
 
 		v := os.Args[i]
 
@@ -238,7 +244,7 @@ func ProcessArgs() (query string, rate string, shuffle bool, async bool) {
 
 		switch v {
 		case "--rate", "-r":
-			if i+1 < argsLen {
+			if i+1 < len(os.Args) {
 				rate = os.Args[i+1]
 				i++
 			}
@@ -265,5 +271,4 @@ func ShowHelp() {
 		
  to stop Ctrl-c.
 		`)
-	os.Exit(0)
 }
