@@ -66,14 +66,12 @@ func SearchMusic(v ITunesRequestParams) <-chan ITunesResponse {
 		} else {
 			defer response.Body.Close()
 
-			contents, err := ioutil.ReadAll(response.Body)
+			var data ITunesResponse
+			err = json.NewDecoder(response.Body).Decode(&data)
 			if err != nil {
 				log.Fatal(err)
 				os.Exit(1)
 			}
-
-			var data ITunesResponse
-			json.Unmarshal([]byte(contents), &data)
 
 			resultChan <- data
 		}
@@ -82,6 +80,7 @@ func SearchMusic(v ITunesRequestParams) <-chan ITunesResponse {
 
 	return resultChan
 }
+
 func Play(fileName string, rate string) {
 	defer os.Remove(fileName)
 
