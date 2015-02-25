@@ -4,11 +4,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sync"
-)
-
-const (
-	asyncLimit = 10
 )
 
 func main() {
@@ -28,7 +23,7 @@ func main() {
 		return
 	}
 
-	query, rate, shuffle, async, list := ProcessArgs()
+	query, rate, shuffle, list := ProcessArgs()
 
 	params := ITunesRequestParams{
 		Term:    query,
@@ -44,24 +39,14 @@ func main() {
 		ShuffleMusic(&result.Musics)
 	}
 
-	if async {
-		if len(result.Musics) > asyncLimit {
-			result.Musics = result.Musics[0:asyncLimit]
-		}
-	}
-
 	if list {
 		InfoAll(result.Musics)
 		return
 	}
 
-	if async {
-		PlayAll(result.Musics, rate)
-	} else {
-		for i, music := range result.Musics {
-			Info(music, i+1, result.Count)
-			Play(<-Download(music.PreviewURL), rate)
-		}
+	for i, music := range result.Musics {
+		Info(music, i+1, result.Count)
+		Play(<-Download(music.PreviewURL), rate)
 	}
 
 }
@@ -72,39 +57,10 @@ func InfoAll(musics []Music) {
 	}
 }
 
-func PlayAll(musics []Music, rate string) {
-
-	var files []string
-	wait := new(sync.WaitGroup)
-
-	for i, music := range musics {
-
-		Info(music, i+1, asyncLimit)
-
-		wait.Add(1)
-		go func(music Music) {
-			files = append(files, <-Download(music.PreviewURL))
-			wait.Done()
-		}(music)
-
-	}
-	wait.Wait()
-
-	for _, f := range files {
-		wait.Add(1)
-		go func(fileName string) {
-			Play(fileName, rate)
-			wait.Done()
-		}(f)
-	}
-	wait.Wait()
-}
-
-func ProcessArgs() (query string, rate string, shuffle bool, async bool, list bool) {
+func ProcessArgs() (query string, rate string, shuffle bool, list bool) {
 
 	rate = "1"
 	shuffle = false
-	async = false
 	list = false
 
 	query = os.Args[1]
@@ -134,8 +90,6 @@ func ProcessArgs() (query string, rate string, shuffle bool, async bool, list bo
 			shuffle = true
 		case "--list", "-l":
 			list = true
-		case "--async":
-			async = true
 		default:
 			fmt.Printf("unknown option %s\n", v)
 			os.Exit(1)
