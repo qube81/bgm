@@ -3,15 +3,23 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 )
 
-func main() {
+func init() {
 	RegisterExitProcess()
-
 	if envvar := os.Getenv("GOMAXPROCS"); envvar == "" {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
+
+	if _, err := exec.LookPath(PlayCmd); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+func main() {
 
 	if len(os.Args) == 1 {
 		fmt.Println("please input term")
@@ -25,26 +33,21 @@ func main() {
 
 	query, rate, shuffle, list := ProcessArgs()
 
-	params := ITunesRequestParams{
-		Term:    query,
-		Country: "JP",
-		Lang:    "ja_jp",
-		Media:   "music",
-		Limit:   "200",
-	}
+	params := DefaultITunesRequestParams()
+	params.Term = query
 
 	result := <-SearchMusic(params)
 
 	if shuffle {
-		ShuffleMusic(&result.Musics)
+		result.Results.Shuffle()
 	}
 
 	if list {
-		InfoAll(result.Musics)
+		InfoAll(result.Results)
 		return
 	}
 
-	for i, music := range result.Musics {
+	for i, music := range result.Results {
 		Info(music, i+1, result.Count)
 		Play(<-Download(music.PreviewURL), rate)
 	}

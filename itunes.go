@@ -20,6 +20,7 @@ var (
 
 const (
 	ItunesEndPoint = "https://itunes.apple.com/search/"
+	PlayCmd        = "afplay"
 )
 
 type ITunesRequestParams struct {
@@ -28,6 +29,17 @@ type ITunesRequestParams struct {
 	Lang    string
 	Media   string
 	Limit   string
+}
+
+func DefaultITunesRequestParams() (d ITunesRequestParams) {
+	d = ITunesRequestParams{
+		Term:    "",
+		Country: "JP",
+		Lang:    "ja_jp",
+		Media:   "music",
+		Limit:   "200",
+	}
+	return
 }
 
 type Music struct {
@@ -39,8 +51,21 @@ type Music struct {
 }
 
 type ITunesResponse struct {
-	Count  int     `json:"resultCount"`
-	Musics []Music `json:"results"`
+	Count   int    `json:"resultCount"`
+	Results Musics `json:"results"`
+}
+
+type Musics []Music
+
+func (self *Musics) Shuffle() {
+
+	musics := *self
+
+	rand.Seed(time.Now().UnixNano())
+	for i := range musics {
+		j := rand.Intn(i + 1)
+		musics[i], musics[j] = musics[j], musics[i]
+	}
 }
 
 func SearchMusic(v ITunesRequestParams) <-chan ITunesResponse {
@@ -84,7 +109,7 @@ func SearchMusic(v ITunesRequestParams) <-chan ITunesResponse {
 func Play(fileName string, rate string) {
 	defer os.Remove(fileName)
 
-	out, _ := exec.Command("afplay", fileName, "--rate", rate, "-q", "1").CombinedOutput()
+	out, _ := exec.Command(PlayCmd, fileName, "--rate", rate, "-q", "1").CombinedOutput()
 	fmt.Print(string(out))
 }
 
@@ -122,17 +147,6 @@ func Download(url string) <-chan string {
 
 	return fileNameChan
 
-}
-
-func ShuffleMusic(a *[]Music) {
-
-	musics := *a
-
-	rand.Seed(time.Now().UnixNano())
-	for i := range musics {
-		j := rand.Intn(i + 1)
-		musics[i], musics[j] = musics[j], musics[i]
-	}
 }
 
 func SweepFiles() {
